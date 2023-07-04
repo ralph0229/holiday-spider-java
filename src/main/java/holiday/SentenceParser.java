@@ -54,11 +54,8 @@ public class SentenceParser {
                 Arrays.asList(this::extractDates1, this::extractDates2, this::extractDates3);
         // 执行
         return dateExtractionMethods.stream()
-                .map(function -> StreamSupport
-                        .stream(Spliterators.spliteratorUnknownSize(function.apply(dateText), 0), false)
-                        .collect(Collectors.toList()))
-                .flatMap(List::stream)
-                .collect(Collectors.collectingAndThen(Collectors.toList(), List::iterator));
+                .flatMap(function -> StreamSupport.stream(Spliterators.spliteratorUnknownSize(function.apply(dateText), 0), false))
+                .iterator();
     }
 
     /**
@@ -183,4 +180,5 @@ public class SentenceParser {
         }
         return result;
     }
+
 }
