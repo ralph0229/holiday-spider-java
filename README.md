@@ -17,4 +17,4 @@
 }
 ```
 ## 参考项目
-[holiday-cn]: https://github.com/NateScarlet/holiday-cn
+[holiday-cn](https://github.com/NateScarlet/holiday-cn)
