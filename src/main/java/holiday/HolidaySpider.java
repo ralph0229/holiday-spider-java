@@ -1,6 +1,8 @@
 package holiday;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -22,14 +24,14 @@ public class HolidaySpider {
     /**
      * 政策搜索url
      */
-    private static final String SEARCH_URL = "http://sousuo.gov.cn/s.htm";
+    private static final String SEARCH_URL = "https://sousuo.www.gov.cn/search-gov/data";
 
     /**
      * 排除的文件url
      */
     private static final List<String> PAPER_EXCLUDE = Arrays.asList(
-            "http://www.gov.cn/zhengce/content/2014-09/29/content_9102.htm",
-            "http://www.gov.cn/zhengce/content/2015-02/09/content_9466.htm"
+            "http://www.gov.cn/zhengce/zhengceku/2014-09/29/content_9102.htm",
+            "http://www.gov.cn/zhengce/zhengceku/2015-02/09/content_9466.htm"
     );
 
     /**
@@ -43,23 +45,21 @@ public class HolidaySpider {
     private static final Map<String, List<Map<String, Object>>> PRE_PARSED_PAPERS = new HashMap<>();
 
     static {
-        PAPER_INCLUDE.put(2015, Arrays.asList(
-                "http://www.gov.cn/zhengce/content/2015-05/13/content_9742.htm"
-        ));
+        PAPER_INCLUDE.put(2015, Collections.singletonList("http://www.gov.cn/zhengce/zhengceku/2015-05/13/content_9742.htm"));
 
         List<Map<String, Object>> paper20150513 = new ArrayList<>();
         paper20150513.add(createDay("抗日战争暨世界反法西斯战争胜利70周年纪念日", LocalDate.of(2015, 9, 3), true));
         paper20150513.add(createDay("抗日战争暨世界反法西斯战争胜利70周年纪念日", LocalDate.of(2015, 9, 4), true));
         paper20150513.add(createDay("抗日战争暨世界反法西斯战争胜利70周年纪念日", LocalDate.of(2015, 9, 5), true));
         paper20150513.add(createDay("抗日战争暨世界反法西斯战争胜利70周年纪念日", LocalDate.of(2015, 9, 6), false));
-        PRE_PARSED_PAPERS.put("http://www.gov.cn/zhengce/content/2015-05/13/content_9742.htm", paper20150513);
+        PRE_PARSED_PAPERS.put("http://www.gov.cn/zhengce/zhengceku/2015-05/13/content_9742.htm", paper20150513);
 
         List<Map<String, Object>> paper20200127 = new ArrayList<>();
         paper20200127.add(createDay("春节", LocalDate.of(2020, 1, 31), true));
         paper20200127.add(createDay("春节", LocalDate.of(2020, 2, 1), true));
         paper20200127.add(createDay("春节", LocalDate.of(2020, 2, 2), true));
         paper20200127.add(createDay("春节", LocalDate.of(2020, 2, 3), false));
-        PRE_PARSED_PAPERS.put("http://www.gov.cn/zhengce/content/2020-01/27/content_5472352.htm", paper20200127);
+        PRE_PARSED_PAPERS.put("http://www.gov.cn/zhengce/zhengceku/2020-01/27/content_5472352.htm", paper20200127);
     }
 
     /**
@@ -86,21 +86,39 @@ public class HolidaySpider {
      */
     private static List<String> getPaperUrls(int year) {
         HashMap<String, Object> params = new HashMap<String, Object>() {{
-            put("t", "paper");
-            put("advance", "true");
-            put("title", year);
-            put("q", "假期");
+            put("t", "zhengcelibrary_gw");
+            put("n", 5);
+            put("q", "假期 " + year);
             put("pcodeJiguan", "国办发明电");
-            put("timetype", "puborg");
+            put("puborg", "国务院办公厅");
+            put("filetype", "通知");
+            put("sort", "pubtime");
         }};
-        String body = getBody(SEARCH_URL, params);
-        Pattern p = Pattern.compile("<li class=\"res-list\".*?><a href=\"(.+?)\".*?></li>", Pattern.DOTALL);
-        Matcher m = p.matcher(body);
+        int pageIndex = 0;
+        boolean hasNextPage = true;
         List<String> ret = new ArrayList<>();
-        while (m.find()) {
-            if(!PAPER_EXCLUDE.contains(m.group(1))) {
-                ret.add(m.group(1));
+        while (hasNextPage) {
+            params.put("p", pageIndex++);
+            String bodyStr = getBody(SEARCH_URL, params);
+            JSONObject body = JSON.parseObject(bodyStr);
+            if(1001 == body.getInteger("code")) {
+                return Collections.emptyList();
             }
+            assert 200 == body.getInteger("code") :
+                    String.format("%s: %s: %s", SEARCH_URL, body.getInteger("code"), body.getString("msg"));
+            JSONObject searchVO = body.getJSONObject("searchVO");
+            JSONArray listVO = searchVO.getJSONArray("listVO");
+            for (int i = 0; i < listVO.size(); i++) {
+                JSONObject obj = listVO.getJSONObject(i);
+                String title = obj.getString("title");
+                if(title.contains(String.valueOf(year))) {
+                    String url = obj.getString("url");
+                    if(!PAPER_EXCLUDE.contains(url)) {
+                        ret.add(url);
+                    }
+                }
+            }
+            hasNextPage = pageIndex < searchVO.getLong("totalpage");
         }
         ret.addAll(PAPER_INCLUDE.getOrDefault(year, Collections.emptyList()));
 
@@ -136,7 +154,7 @@ public class HolidaySpider {
      * @return 政策文件主体
      */
     private static String getPaper(String url) {
-        Pattern pattern = Pattern.compile("http://www.gov.cn/zhengce/content/\\d{4}-\\d{2}/\\d{2}/content_\\d+.htm");
+        Pattern pattern = Pattern.compile("https://www.gov.cn/zhengce/(zhengceku|content)/\\d{4}-\\d{2}/\\d{2}/content_\\d+.htm");
         Matcher matcher = pattern.matcher(url);
         boolean conform = matcher.find();
         assert conform : "网站变化,需要人工验证";
@@ -150,7 +168,7 @@ public class HolidaySpider {
             content.append(p.text()).append("\n");
         }
         assert content.length() > 0 : "无法从url获取政策文件内容: " + url;
-        return content.toString();
+        return content.toString().trim();
     }
 
     /**
@@ -256,15 +274,13 @@ public class HolidaySpider {
                 .get()
                 .url(url)
                 .build();
-        try {
-            Response response = new OkHttpClient().newCall(request).execute();
+        try (Response response = new OkHttpClient().newCall(request).execute()){
             String result = null;
             if (response.body() != null) {
                 result = response.body().string();
             }
             return result;
-        } catch (IOException ignored) {
-        }
+        } catch (IOException ignored) {}
         return "";
     }
 
@@ -299,8 +315,8 @@ public class HolidaySpider {
             Iterator<Tuple<String, String>> iterator2) {
         return Stream.concat(
                         StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator1, 0), false),
-                        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator2, 0), false))
-                .collect(Collectors.collectingAndThen(Collectors.toList(), List::iterator));
+                        StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator2, 0), false)
+                ).iterator();
     }
 
     public static void main(String[] args){
