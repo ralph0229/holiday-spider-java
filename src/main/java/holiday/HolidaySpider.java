@@ -1,8 +1,8 @@
 package holiday;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import holiday.factory.HttpServiceFactory;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -113,19 +113,19 @@ public class HolidaySpider {
         while (hasNextPage) {
             params.put("p", pageIndex++);
             String bodyStr = HttpServiceFactory.createHttpService().getBody(SEARCH_URL, params);
-            JSONObject body = JSON.parseObject(bodyStr);
-            if(1001 == body.getInteger("code")) {
+            JSONObject body = JSONUtil.parseObj(bodyStr);
+            if(1001 == body.getInt("code")) {
                 return Collections.emptyList();
             }
-            assert 200 == body.getInteger("code") :
-                    String.format("%s: %s: %s", SEARCH_URL, body.getInteger("code"), body.getString("msg"));
+            assert 200 == body.getInt("code") :
+                    String.format("%s: %s: %s", SEARCH_URL, body.getInt("code"), body.getStr("msg"));
             JSONObject searchVO = body.getJSONObject("searchVO");
             JSONArray listVO = searchVO.getJSONArray("listVO");
             for (int i = 0; i < listVO.size(); i++) {
                 JSONObject obj = listVO.getJSONObject(i);
-                String title = obj.getString("title");
+                String title = obj.getStr("title");
                 if(title.contains(String.valueOf(year))) {
-                    String url = obj.getString("url");
+                    String url = obj.getStr("url");
                     if(!PAPER_EXCLUDE.contains(url)) {
                         ret.add(url);
                     }
@@ -274,7 +274,7 @@ public class HolidaySpider {
                 .map(paperUrl -> parsePaper(year, paperUrl))
                 .flatMap(List::stream)
                 .collect(Collectors.toList()));
-        return JSON.toJSONString(result);
+        return JSONUtil.toJsonStr(result);
     }
 
     public static void main(String[] args) {
