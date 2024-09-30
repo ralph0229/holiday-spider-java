@@ -167,11 +167,6 @@ public class HolidaySpider {
      * @return 政策文件主体
      */
     private static String getPaper(String url) {
-        Pattern pattern = Pattern.compile(
-                "https://www.gov.cn/zhengce/(zhengceku|content)/\\d{4}-\\d{2}/\\d{2}/content_\\d+.htm");
-        Matcher matcher = pattern.matcher(url);
-        boolean conform = matcher.find();
-        assert conform : "网站变化,需要人工验证";
         String body = HttpServiceFactory.createHttpService().getBody(url, null);
         Document doc = Jsoup.parse(body);
         Element container = doc.getElementById("UCAP-CONTENT");
