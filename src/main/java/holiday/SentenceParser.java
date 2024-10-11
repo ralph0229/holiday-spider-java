@@ -54,9 +54,14 @@ public class SentenceParser {
         // 汇集日期解析方法
         List<Function<String, Iterator<LocalDate>>> dateExtractionMethods =
                 Arrays.asList(this::extractDates1, this::extractDates2, this::extractDates3);
+        dateText = dateText.replace("(", "（").replace(")", "）");
         // 执行
+        String finalDateText = dateText;
         return dateExtractionMethods.stream()
-                .flatMap(function -> StreamSupport.stream(Spliterators.spliteratorUnknownSize(function.apply(dateText), 0), false))
+                .flatMap(function -> StreamSupport.stream(
+                        Spliterators.spliteratorUnknownSize(function.apply(finalDateText), 0),
+                        false))
+                .distinct()
                 .iterator();
     }
 
@@ -70,6 +75,9 @@ public class SentenceParser {
         Matcher matcher = Pattern.compile("(?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日").matcher(dateText);
         List<LocalDate> dates = new ArrayList<>();
         while (matcher.find()) {
+            if(matcher.groupCount() % 3 != 0) {
+                continue;
+            }
             LocalDate date = parent.getDate(matcher.group(1), matcher.group(2), matcher.group(3));
             if(!parent.dateHistory.contains(date)) {
                 parent.dateHistory.add(date);
@@ -86,12 +94,15 @@ public class SentenceParser {
      * @return 解析后日期
      */
     public Iterator<LocalDate> extractDates2(String dateText) {
-        dateText = dateText.replaceAll("(.+?)", "");
+        dateText = dateText.replaceAll("（.+?）", "");
         Matcher matcher = Pattern.compile(
                 "(?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日[至\\-—](?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日"
         ).matcher(dateText);
         List<LocalDate> dates = new ArrayList<>();
         while (matcher.find()) {
+            if(matcher.groupCount() %6 != 0) {
+                continue;
+            }
             LocalDate start = parent.getDate(matcher.group(1), matcher.group(2), matcher.group(3));
             LocalDate end =  parent.getDate(matcher.group(4), matcher.group(5), matcher.group(6));
             dates.add(start);
@@ -112,14 +123,16 @@ public class SentenceParser {
      * @return 解析后日期
      */
     public Iterator<LocalDate> extractDates3(String dateText) {
-        dateText = dateText.replaceAll("(.+?)", "");
+        dateText = dateText.replaceAll("（.+?）", "");
         Matcher matcher = Pattern.compile(
-                "(?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日([^)]+)?" +
-                        "(?:、(?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日([^)]+)?)+").matcher(dateText);
+                "(?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日(?:（[^）]+）)?(?:、(?:(\\d+)年)?(?:(\\d+)月)?(\\d+)日(?:（[^）]+）)?)+")
+                .matcher(dateText);
         List<LocalDate> dates = new ArrayList<>();
         while (matcher.find()) {
-            assert matcher.groupCount() % 3 == 0;
-            for (int i = 0; i < matcher.groupCount(); i++) {
+            if(matcher.groupCount() % 3 != 0) {
+                continue;
+            }
+            for (int i = 0; i < matcher.groupCount(); i += 3) {
                 LocalDate date = parent.getDate(matcher.group(i + 1), matcher.group(i + 2), matcher.group(i + 3));
                 if(!parent.dateHistory.contains(date)) {
                     dates.add(date);
